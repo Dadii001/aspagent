@@ -1,0 +1,23 @@
+{
+  "name": "aisongpromo-agents",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI agent team that drives sales to aisongpromo.com via TikTok",
+  "type": "module",
+  "scripts": {
+    "prospector": "tsx src/agents/prospector.ts",
+    "outreach": "tsx src/agents/outreach.ts",
+    "operator": "tsx src/agents/operator.ts",
+    "db:init": "tsx src/tools/db.ts --init",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
