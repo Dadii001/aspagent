@@ -19,17 +19,32 @@ Prospector  →  Outreach Writer  →  Funnel Operator
 ```bash
 npm install
 cp .env.example .env
-# fill in ANTHROPIC_API_KEY and TIKTOK_API_KEY
+# fill in ANTHROPIC_API_KEY and RAPIDAPI_KEY
 npm run db:init
 ```
 
 ## Run each agent
 
 ```bash
-npm run prospector   # scrape + score TikTok artists → leads table
-npm run outreach     # draft DMs for new leads → drafts column
-npm run operator     # daily funnel report (Telegram later)
+# Default hashtags: newmusic newartist indieartist newsong unsignedartist
+npm run prospector
+
+# Or pass custom hashtags:
+npm run prospector -- newartist afrobeats newsong
+
+npm run outreach     # stub — next milestone
+npm run operator     # stub — next milestone
 ```
+
+## How Prospector works
+
+1. For each hashtag → finds the challenge_id via `/challenge/search`
+2. Paginates `/challenge/posts` for the past `PROSPECTOR_HOURS_AGO` hours
+3. Groups videos by creator, dedupes against existing leads/rejects
+4. Hydrates follower counts via `/user/info`
+5. Prefilters (1k–500k followers) to save tokens
+6. Hands up to 60 candidates to Claude for scoring against the rules in `src/prompts/prospector.md`
+7. Agent calls `save_lead` / `reject_lead` / `finish_run` — results written to `data/leads.json`
 
 ## Agent roles
 

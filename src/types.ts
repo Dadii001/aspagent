@@ -1,26 +1,37 @@
-export type TikTokAccount = {
-  handle: string;
-  display_name: string;
-  bio: string;
-  followers: number;
-  following: number;
-  total_likes: number;
-  verified: boolean;
-  language_hint?: string;
-  recent_posts: TikTokPost[];
+export type TikTokVideo = {
+  video_id: string;
+  title: string;
+  creator_username: string;
+  creator_nickname: string;
+  creator_id: string;
+  creator_avatar: string;
+  play_count: number;
+  like_count: number;
+  comment_count: number;
+  share_count: number;
+  collect_count: number;
+  create_time: number; // unix seconds
+  create_date: string; // ISO
+  cover: string;
+  duration: number;
 };
 
-export type TikTokPost = {
+export type TikTokCreator = {
+  username: string;
+  nickname: string;
   id: string;
-  url: string;
-  caption: string;
-  posted_at: string;
-  views: number;
-  likes: number;
-  comments: number;
-  shares: number;
-  is_original_sound: boolean;
-  sound_title?: string;
+  avatar: string;
+  video_count_in_window: number;
+  total_plays_in_window: number;
+  total_likes_in_window: number;
+  total_comments_in_window: number;
+  total_shares_in_window: number;
+  follower_count: number;
+  following_count: number;
+  heart_count: number;
+  total_videos: number;
+  verified: boolean;
+  videos: TikTokVideo[];
 };
 
 export type Lead = {
