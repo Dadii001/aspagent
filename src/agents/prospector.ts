@@ -184,50 +184,80 @@ async function runProspector() {
     return;
   }
 
-  const sliced = candidates.slice(0, 60).map(toCandidate);
+  const BATCH_SIZE = Number(process.env.PROSPECTOR_BATCH_SIZE ?? 25);
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  const userMessage = `Score these ${sliced.length} TikTok creators. Save qualifying (score >= 50) with save_lead, reject the rest with reject_lead, and call finish_run when done.\n\n${JSON.stringify(sliced, null, 2)}`;
 
-  let messages: Anthropic.MessageParam[] = [{ role: "user", content: userMessage }];
-  let done = false;
-  let loops = 0;
-  const MAX_LOOPS = 30;
+  let totalSaved = 0;
+  let totalRejected = 0;
 
-  while (!done && loops < MAX_LOOPS) {
-    loops++;
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 4096,
-      system: SYSTEM_PROMPT,
-      tools,
-      messages,
-    });
-
-    const toolUses = response.content.filter(
-      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
+  for (let start = 0; start < candidates.length; start += BATCH_SIZE) {
+    const batch = candidates.slice(start, start + BATCH_SIZE).map(toCandidate);
+    console.log(
+      `\n[prospector] batch ${Math.floor(start / BATCH_SIZE) + 1}/${Math.ceil(candidates.length / BATCH_SIZE)} — ${batch.length} candidates`,
     );
-    if (toolUses.length === 0) {
-      console.log("[prospector] no more tool calls — stopping");
-      break;
+
+    const userMessage = `Score these ${batch.length} TikTok creators. Save qualifying (score >= 50) with save_lead, reject the rest with reject_lead, and call finish_run when done.\n\n${JSON.stringify(batch, null, 2)}`;
+
+    let messages: Anthropic.MessageParam[] = [{ role: "user", content: userMessage }];
+    let done = false;
+    let loops = 0;
+    const MAX_LOOPS = 20;
+
+    while (!done && loops < MAX_LOOPS) {
+      loops++;
+      process.stdout.write(`  loop ${loops} → Claude... `);
+      let response: Anthropic.Message;
+      try {
+        response = await client.messages.create({
+          model: MODEL,
+          max_tokens: 4096,
+          system: SYSTEM_PROMPT,
+          tools,
+          messages,
+        });
+      } catch (err) {
+        console.error(`\n[prospector] Claude error on loop ${loops}:`, (err as Error).message);
+        throw err;
+      }
+
+      const toolUses = response.content.filter(
+        (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
+      );
+      console.log(`${toolUses.length} tool calls, stop=${response.stop_reason}`);
+
+      if (toolUses.length === 0) {
+        console.log("  no more tool calls — ending batch");
+        break;
+      }
+
+      const toolResults: Anthropic.ToolResultBlockParam[] = toolUses.map((tu) => {
+        const handler = handlers[tu.name];
+        const output = handler ? handler(tu.input) : JSON.stringify({ error: `unknown tool ${tu.name}` });
+        const inp = tu.input as any;
+        if (tu.name === "save_lead") {
+          totalSaved++;
+          console.log(`    ✅ save_lead @${inp.tiktok_handle} score=${inp.score}${inp.needs_review ? " [REVIEW]" : ""}`);
+        } else if (tu.name === "reject_lead") {
+          totalRejected++;
+          console.log(`    ❌ reject @${inp.tiktok_handle} (${inp.reason})`);
+        } else if (tu.name === "finish_run") {
+          console.log(`    🏁 finish_run`, inp);
+          done = true;
+        }
+        return { type: "tool_result", tool_use_id: tu.id, content: output };
+      });
+
+      messages = [
+        ...messages,
+        { role: "assistant", content: response.content },
+        { role: "user", content: toolResults },
+      ];
+
+      if (response.stop_reason === "end_turn" && !done) break;
     }
-
-    const toolResults: Anthropic.ToolResultBlockParam[] = toolUses.map((tu) => {
-      const handler = handlers[tu.name];
-      const output = handler ? handler(tu.input) : JSON.stringify({ error: `unknown tool ${tu.name}` });
-      if (tu.name === "finish_run") done = true;
-      return { type: "tool_result", tool_use_id: tu.id, content: output };
-    });
-
-    messages = [
-      ...messages,
-      { role: "assistant", content: response.content },
-      { role: "user", content: toolResults },
-    ];
-
-    if (response.stop_reason === "end_turn" && !done) break;
   }
 
-  console.log(`[prospector] done in ${loops} loops. leads in DB: ${countLeads()}`);
+  console.log(`\n[prospector] done. saved=${totalSaved} rejected=${totalRejected} total leads in DB: ${countLeads()}`);
 }
 
 runProspector().catch((err) => {
